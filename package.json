@@ -4,7 +4,7 @@
     "inquirer": "^9.2.23",
     "qr-image": "^3.2.0"
   },
-  "name": "2.4-qr-code-project",
+  "name": "qr-code-generator",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
@@ -13,5 +13,6 @@
   },
   "author": "Vibu",
   "license": "ISC",
-  "description": ""
+  "description": "",
+  "devDependencies": {}
 }
