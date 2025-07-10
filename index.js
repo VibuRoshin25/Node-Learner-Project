@@ -1,24 +1,48 @@
-import inquirer from "inquirer";
-import qr from "qr-image";
-import fs from "fs";
+import express from "express";
+import bodyParser from "body-parser";
+import jwt from "jsonwebtoken";
+import crypto from "crypto";
 
-inquirer
-  .prompt([
-    {
-      message: "Type in your url: ",
-      name: "URL",
-    },
-  ])
-  .then((answers) => {
-    const url = answers.URL;
-    var qr_svg = qr.image(url);
-    qr_svg.pipe(fs.createWriteStream("./qr-codes/" + url + "_qr_img.png"));
-    console.log("Success!");
-  })
-  .catch((error) => {
-    if (error.isTtyError) {
-      console.log("Prompt couldn't be rendered in the current environment");
-    } else {
-      console.log("Something else went wrong");
-    }
-  });
+const app = express();
+const PORT = process.env.PORT || 8000;
+const JWT_SECRET =
+  process.env.JWT_SECRET || crypto.randomBytes(32).toString("hex");
+
+app.use(bodyParser.json());
+
+app.get("/health", (_, res) => {
+  res.json({ status: "ok" });
+});
+
+// POST /token/generate
+app.post("/token/generate", (req, res) => {
+  const { userId } = req.body;
+  if (!userId || typeof userId !== "string") {
+    return res.status(400).json({ error: "Missing userId" });
+  }
+
+  const payload = { userId };
+  const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "15m" });
+
+  res.json({ token });
+});
+
+// POST /token/validate
+app.post("/token/validate", (req, res) => {
+  const { token } = req.body;
+  if (!token) {
+    return res.status(400).json({ error: "Missing token" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    res.json({ valid: true, payload: decoded });
+  } catch (err) {
+    res.json({ valid: false, error: err.message });
+  }
+});
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`Auth service running on PORT ${PORT}`);
+});
