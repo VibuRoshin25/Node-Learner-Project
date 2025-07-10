@@ -16,12 +16,15 @@ app.get("/health", (_, res) => {
 
 // POST /token/generate
 app.post("/token/generate", (req, res) => {
-  const { userId } = req.body;
-  if (!userId || typeof userId !== "string") {
+  const { email, userId } = req.body;
+  if (!userId || typeof userId !== "number") {
     return res.status(400).json({ error: "Missing userId" });
   }
+  if (!email || typeof email !== "string") {
+    return res.status(400).json({ error: "Missing email" });
+  }
 
-  const payload = { userId };
+  const payload = { userId, email };
   const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "15m" });
 
   res.json({ token });
