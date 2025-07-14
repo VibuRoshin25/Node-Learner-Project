@@ -1,7 +1,10 @@
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const grpc = require("@grpc/grpc-js");
-const token = require("./proto/token_pb.js");
+const {
+  GenerateTokenResponse,
+  ValidateTokenResponse,
+} = require("./proto/token_pb.js");
 const service = require("./proto/token_grpc_pb.js");
 
 const PORT = process.env.PORT || 8000;
@@ -25,7 +28,7 @@ function GenerateToken(call, callback) {
   }
   const payload = { userId, email };
   const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "15m" });
-  const response = new token.TokenResponse();
+  const response = new GenerateTokenResponse();
   response.setToken(token);
   callback(null, response);
 }
@@ -41,12 +44,12 @@ function ValidateToken(call, callback) {
   }
   try {
     const decoded = jwt.verify(tokenStr, JWT_SECRET);
-    const response = new token.TokenValidationResponse();
+    const response = new ValidateTokenResponse();
     response.setValid(true);
     response.setPayload(JSON.stringify(decoded));
     callback(null, response);
   } catch (err) {
-    const response = new token.TokenValidationResponse();
+    const response = new ValidateTokenResponse();
     response.setValid(false);
     response.setError(err.message);
     callback(null, response);
@@ -57,8 +60,8 @@ function ValidateToken(call, callback) {
 function main() {
   const server = new grpc.Server();
   server.addService(service.TokenService, {
-    GenerateToken: GenerateToken,
-    ValidateToken: ValidateToken,
+    generateToken: GenerateToken,
+    validateToken: ValidateToken,
   });
   server.bindAsync(
     `0.0.0.0:${PORT}`,
