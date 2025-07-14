@@ -1,51 +1,76 @@
-import express from "express";
-import bodyParser from "body-parser";
-import jwt from "jsonwebtoken";
-import crypto from "crypto";
+const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
+const grpc = require("@grpc/grpc-js");
+const token = require("./proto/token_pb.js");
+const service = require("./proto/token_grpc_pb.js");
 
-const app = express();
 const PORT = process.env.PORT || 8000;
 const JWT_SECRET =
   process.env.JWT_SECRET || crypto.randomBytes(32).toString("hex");
 
-app.use(bodyParser.json());
-
-app.get("/health", (_, res) => {
-  res.json({ status: "ok" });
-});
-
-// POST /token/generate
-app.post("/token/generate", (req, res) => {
-  const { email, userId } = req.body;
+// Generate a JWT token for a user
+function GenerateToken(call, callback) {
+  const { email, userId } = call.request.toObject();
   if (!userId || typeof userId !== "number") {
-    return res.status(400).json({ error: "Missing userId" });
+    return callback({
+      code: grpc.status.INVALID_ARGUMENT,
+      message: "Missing userId",
+    });
   }
   if (!email || typeof email !== "string") {
-    return res.status(400).json({ error: "Missing email" });
+    return callback({
+      code: grpc.status.INVALID_ARGUMENT,
+      message: "Missing email",
+    });
   }
-
   const payload = { userId, email };
   const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "15m" });
+  const response = new token.TokenResponse();
+  response.setToken(token);
+  callback(null, response);
+}
 
-  res.json({ token });
-});
-
-// POST /token/validate
-app.post("/token/validate", (req, res) => {
-  const { token } = req.body;
-  if (!token) {
-    return res.status(400).json({ error: "Missing token" });
+// Validate a JWT token and return its payload
+function ValidateToken(call, callback) {
+  const { token: tokenStr } = call.request.toObject();
+  if (!tokenStr) {
+    return callback({
+      code: grpc.status.INVALID_ARGUMENT,
+      message: "Missing token",
+    });
   }
-
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    res.json({ valid: true, payload: decoded });
+    const decoded = jwt.verify(tokenStr, JWT_SECRET);
+    const response = new token.TokenValidationResponse();
+    response.setValid(true);
+    response.setPayload(JSON.stringify(decoded));
+    callback(null, response);
   } catch (err) {
-    res.json({ valid: false, error: err.message });
+    const response = new token.TokenValidationResponse();
+    response.setValid(false);
+    response.setError(err.message);
+    callback(null, response);
   }
-});
+}
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Auth service running on PORT ${PORT}`);
-});
+// Main function to start the gRPC server
+function main() {
+  const server = new grpc.Server();
+  server.addService(service.TokenService, {
+    GenerateToken: GenerateToken,
+    ValidateToken: ValidateToken,
+  });
+  server.bindAsync(
+    `0.0.0.0:${PORT}`,
+    grpc.ServerCredentials.createInsecure(),
+    (err, port) => {
+      if (err) {
+        console.error(`Error starting Auth server: ${err}`);
+        return;
+      }
+      console.log(`Auth server running on port ${port}`);
+    }
+  );
+}
+
+main();
